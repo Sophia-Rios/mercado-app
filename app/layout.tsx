@@ -31,6 +31,21 @@ export const metadata: Metadata = {
   },
 };
 
+// sem isso, o celular renderiza a página como se fosse desktop (viewport
+// de 980px) e só depois encolhe pra caber na tela — daí o efeito de "dá
+// um zoom" ao abrir. Não trava o zoom do usuário (maximumScale de
+// propósito ausente): isso quebraria acessibilidade pra quem precisa
+// ampliar a tela.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#FFFFFF" },
+    { media: "(prefers-color-scheme: dark)", color: "#000000" },
+  ],
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
