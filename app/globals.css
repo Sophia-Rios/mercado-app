@@ -1,0 +1,111 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #FFFFFF;
+  --surface: #FFFFFF;
+  --surface-raised: #F5F5F7;
+  --text: #1D1D1F;
+  --muted: #86868B;
+  --border: #E5E5E7;
+  --accent: #000000;
+  --accent-contrast: #FFFFFF;
+  --success: #1D7A46;
+  --success-bg: #E9F6EE;
+  --warning: #A96B00;
+  --warning-bg: #FBF1DE;
+  --danger: #C4372B;
+  --danger-bg: #FBEAE8;
+}
+
+.dark {
+  --bg: #000000;
+  --surface: #0A0A0C;
+  --surface-raised: #1C1C1E;
+  --text: #F5F5F7;
+  --muted: #98989D;
+  --border: #2C2C2E;
+  --accent: #FFFFFF;
+  --accent-contrast: #000000;
+  --success: #4FD37B;
+  --success-bg: #12271A;
+  --warning: #E8A93B;
+  --warning-bg: #2E2410;
+  --danger: #F0665B;
+  --danger-bg: #341715;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-contrast: var(--accent-contrast);
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --font-display: var(--font-sora);
+  --font-body: var(--font-manrope);
+  --font-data: var(--font-jetbrains);
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body), -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.01em;
+}
+
+h1, h2, h3, .font-display {
+  font-family: var(--font-display), sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.font-data {
+  font-family: var(--font-data), monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.surface-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+}
+
+.btn-accent {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+/* motivo do "recibo": linha pontilhada tipo cupom fiscal, ancora o app no mundo do mercado */
+.receipt-divider {
+  background-image: repeating-linear-gradient(90deg, var(--border) 0, var(--border) 6px, transparent 6px, transparent 12px);
+  height: 1px;
+}
+
+.blur-surface {
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

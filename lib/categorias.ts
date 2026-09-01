@@ -1,0 +1,17 @@
+export const CATEGORIAS = [
+  "Mercearia",
+  "Hortifruti",
+  "Laticínios",
+  "Carnes e Aves",
+  "Congelados",
+  "Padaria",
+  "Bebidas",
+  "Doces",
+  "Limpeza",
+  "Higiene Pessoal",
+  "Utilidades Domésticas",
+  "Bazar e Ferramentas",
+  "Frios e Embutidos",
+  "Cama, mesa e banho",
+  "Outros",
+];
