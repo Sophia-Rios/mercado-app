@@ -36,9 +36,11 @@ export default function ListaCompras() {
   const comprados = itens.filter((i) => i.comprado);
   const estimativa = pendentes.reduce((sum, item) => sum + (ultimoPreco.get(item.produto_id) ?? 0) * item.quantidade_desejada, 0);
 
-  const produtosFiltrados = produtos.filter(
-    (p) => busca.length > 0 && p.nome.toLowerCase().includes(busca.toLowerCase()) && !itens.some((i) => i.produto_id === p.id)
-  );
+  const produtosFiltrados = produtos.filter((p) => {
+    if (busca.length === 0 || itens.some((i) => i.produto_id === p.id)) return false;
+    const termo = busca.toLowerCase();
+    return p.nome.toLowerCase().includes(termo) || (p.marca ?? "").toLowerCase().includes(termo);
+  });
 
   async function adicionarItem(produtoId: string) {
     const { error } = await supabase.from("lista_compras").insert({ produto_id: produtoId, quantidade_desejada: 1 });
@@ -123,10 +125,13 @@ export default function ListaCompras() {
               <button
                 key={p.id}
                 onClick={() => adicionarItem(p.id)}
-                className="w-full text-left px-4 py-3 hover:bg-bg text-sm flex items-center justify-between"
+                className="w-full text-left px-4 py-3 hover:bg-bg text-sm flex items-center justify-between gap-2"
               >
-                <span>{p.nome}</span>
-                <span className="text-muted text-xs">{p.categoria}</span>
+                <span className="min-w-0">
+                  <span className="block truncate">{p.nome}</span>
+                  {p.marca && <span className="block text-xs text-muted truncate">{p.marca}</span>}
+                </span>
+                <span className="text-muted text-xs flex-shrink-0">{p.categoria}</span>
               </button>
             ))}
             <button
