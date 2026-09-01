@@ -43,19 +43,27 @@ export default function ImportarModal({ onFechar }: { onFechar: () => void }) {
 
     setImportando(true);
 
-    const [{ data: produtosExistentes, error: erroProdutos }, { data: mercadosExistentes, error: erroMercados }] =
-      await Promise.all([
-        supabase.from("produtos").select("id, nome"),
-        supabase.from("mercados").select("id, nome"),
-      ]);
-    if (erroProdutos || erroMercados) {
+    const [
+      { data: produtosExistentes, error: erroProdutos },
+      { data: mercadosExistentes, error: erroMercados },
+      { data: comprasExistentes, error: erroComprasExistentes },
+    ] = await Promise.all([
+      supabase.from("produtos").select("id, nome, marca"),
+      supabase.from("mercados").select("id, nome"),
+      supabase.from("compras").select("produto_id, mercado_id, data_compra, quantidade, preco_unitario"),
+    ]);
+    if (erroProdutos || erroMercados || erroComprasExistentes) {
       setImportando(false);
-      mostrarToast(mensagemErroSupabase(erroProdutos || erroMercados)!);
+      mostrarToast(mensagemErroSupabase(erroProdutos || erroMercados || erroComprasExistentes)!);
       return;
     }
 
-    const produtoPorNome = new Map(
-      (produtosExistentes ?? []).map((p) => [p.nome.trim().toLowerCase(), p.id as string])
+    // produto = nome + marca juntos, não só nome — "Azeite Galo" e "Azeite
+    // Herdade dos Coteis" são produtos diferentes de verdade, com preços
+    // diferentes; tratar como um produto só embaralha o histórico de preço
+    const chaveProduto = (nome: string, marca: string) => `${nome.trim().toLowerCase()}|${marca.trim().toLowerCase()}`;
+    const produtoPorChave = new Map(
+      (produtosExistentes ?? []).map((p) => [chaveProduto(p.nome, p.marca ?? ""), p.id as string])
     );
     const mercadoPorNome = new Map(
       (mercadosExistentes ?? []).map((m) => [m.nome.trim().toLowerCase(), m.id as string])
@@ -65,10 +73,10 @@ export default function ImportarModal({ onFechar }: { onFechar: () => void }) {
     const novosMercados: { id: string; nome: string }[] = [];
 
     validas.forEach((l) => {
-      const chaveProduto = l.nome.trim().toLowerCase();
-      if (!produtoPorNome.has(chaveProduto)) {
+      const chaveP = chaveProduto(l.nome, l.marca);
+      if (!produtoPorChave.has(chaveP)) {
         const id = crypto.randomUUID();
-        produtoPorNome.set(chaveProduto, id);
+        produtoPorChave.set(chaveP, id);
         novosProdutos.push({ id, nome: l.nome, marca: l.marca || null, categoria: l.categoria || "Outros" });
       }
       const chaveMercado = l.mercado.trim().toLowerCase();
@@ -96,23 +104,63 @@ export default function ImportarModal({ onFechar }: { onFechar: () => void }) {
       }
     }
 
-    const novasCompras = validas.map((l) => ({
-      produto_id: produtoPorNome.get(l.nome.trim().toLowerCase())!,
-      mercado_id: mercadoPorNome.get(l.mercado.trim().toLowerCase())!,
-      quantidade: l.quantidade,
-      preco_unitario: Math.round((l.precoUnitario ?? 0) * 100) / 100,
-      preco_total: Math.round((l.precoTotal ?? 0) * 100) / 100,
-      data_compra: l.data,
-    }));
+    // deduplica contra compras que já existem no banco (reimportar o mesmo
+    // cupom duas vezes não deve dobrar a compra) e contra linhas repetidas
+    // dentro do próprio arquivo — nunca contra outra compra em data
+    // diferente, que é uma compra de verdade e precisa virar linha nova
+    const chaveCompra = (produtoId: string, mercadoId: string, data: string, quantidade: number, preco: number) =>
+      `${produtoId}|${mercadoId}|${data}|${quantidade}|${preco.toFixed(2)}`;
+    const chavesExistentes = new Set(
+      (comprasExistentes ?? [])
+        .filter((c) => c.produto_id)
+        .map((c) => chaveCompra(c.produto_id!, c.mercado_id, c.data_compra, c.quantidade, c.preco_unitario))
+    );
 
-    const { error: erroCompras } = await supabase.from("compras").insert(novasCompras);
-    setImportando(false);
-    if (erroCompras) {
-      mostrarToast(mensagemErroSupabase(erroCompras)!);
-      return;
+    let puladasPorDuplicidade = 0;
+    const novasCompras: {
+      produto_id: string;
+      mercado_id: string;
+      quantidade: number;
+      preco_unitario: number;
+      preco_total: number;
+      data_compra: string;
+    }[] = [];
+
+    validas.forEach((l) => {
+      const produtoId = produtoPorChave.get(chaveProduto(l.nome, l.marca))!;
+      const mercadoId = mercadoPorNome.get(l.mercado.trim().toLowerCase())!;
+      const precoUnitario = Math.round((l.precoUnitario ?? 0) * 100) / 100;
+      const chave = chaveCompra(produtoId, mercadoId, l.data, l.quantidade, precoUnitario);
+      if (chavesExistentes.has(chave)) {
+        puladasPorDuplicidade++;
+        return;
+      }
+      chavesExistentes.add(chave);
+      novasCompras.push({
+        produto_id: produtoId,
+        mercado_id: mercadoId,
+        quantidade: l.quantidade,
+        preco_unitario: precoUnitario,
+        preco_total: Math.round((l.precoTotal ?? 0) * 100) / 100,
+        data_compra: l.data,
+      });
+    });
+
+    if (novasCompras.length > 0) {
+      const { error: erroCompras } = await supabase.from("compras").insert(novasCompras);
+      if (erroCompras) {
+        setImportando(false);
+        mostrarToast(mensagemErroSupabase(erroCompras)!);
+        return;
+      }
     }
+    setImportando(false);
 
-    mostrarToast(`${validas.length} ${validas.length === 1 ? "compra importada" : "compras importadas"}`);
+    const partes = [`${novasCompras.length} ${novasCompras.length === 1 ? "compra importada" : "compras importadas"}`];
+    if (puladasPorDuplicidade > 0) {
+      partes.push(`${puladasPorDuplicidade} já existiam e foram ignoradas`);
+    }
+    mostrarToast(partes.join(" · "));
     onFechar();
   }
 
