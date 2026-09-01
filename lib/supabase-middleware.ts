@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 // rotas acessíveis sem estar logado — a tela de convite precisa ser
 // pública porque quem clica no link ainda não tem conta
-const ROTAS_PUBLICAS = ["/login", "/criar-conta", "/convite"];
+const ROTAS_PUBLICAS = ["/login", "/criar-conta", "/convite", "/esqueci-senha", "/redefinir-senha"];
 
 export async function atualizarSessao(request: NextRequest) {
   let response = NextResponse.next({ request });

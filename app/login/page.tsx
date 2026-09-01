@@ -70,6 +70,9 @@ function LoginConteudo() {
               onChange={(e) => setSenha(e.target.value)}
               className="w-full px-3 py-2.5 rounded-lg bg-bg border border-border text-sm"
             />
+            <Link href="/esqueci-senha" className="text-xs text-muted hover:text-text underline mt-1.5 inline-block">
+              Esqueci minha senha
+            </Link>
           </label>
           {erro && <p className="text-xs text-danger">{erro}</p>}
           <button

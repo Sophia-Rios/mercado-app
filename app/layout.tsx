@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Sora, Manrope, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import ThemeScript from "@/components/ThemeScript";
