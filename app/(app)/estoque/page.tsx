@@ -47,7 +47,7 @@ export default function Estoque() {
       estoque_minimo: form.estoque_minimo,
       ultima_compra_data: form.ultima_compra_data || null,
       unidade_consumo: form.unidade_consumo.trim() || null,
-      quantidade_unidade_consumo: form.quantidade_unidade_consumo || null,
+      quantidade_unidade_consumo: form.quantidade_unidade_consumo > 0 ? form.quantidade_unidade_consumo : null,
     };
 
     if (modalProdutoId === "novo") {

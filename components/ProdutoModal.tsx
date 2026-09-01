@@ -162,7 +162,7 @@ export default function ProdutoModal({
                   type="number"
                   min={1}
                   value={form.quantidade_unidade_consumo}
-                  onChange={(e) => campo("quantidade_unidade_consumo", Math.max(1, Number(e.target.value)))}
+                  onChange={(e) => campo("quantidade_unidade_consumo", Number(e.target.value))}
                   className="w-full px-3 py-2.5 rounded-lg bg-bg border border-border text-sm font-data"
                 />
               </Campo>
