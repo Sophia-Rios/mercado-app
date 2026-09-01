@@ -109,3 +109,12 @@ h1, h2, h3, .font-display {
     animation: none !important;
   }
 }
+
+/* iOS Safari força um zoom automático ao focar qualquer campo com
+   font-size menor que 16px — e enquanto a página fica nesse zoom forçado,
+   elementos "fixed"/"sticky" (a topbar e o menu inferior) saem do lugar.
+   Precisa de !important porque isso tem que vencer o text-sm (14px) que
+   está aplicado direto nos inputs em várias telas. */
+input, select, textarea {
+  font-size: 16px !important;
+}
