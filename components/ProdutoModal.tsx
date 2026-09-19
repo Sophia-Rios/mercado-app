@@ -1,13 +1,17 @@
 "use client";
 
-import { useState } from "react";
-import { Barcode, Camera, Repeat, Trash2, X } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { Barcode, Camera, ImagePlus, Repeat, Trash2, X } from "lucide-react";
+import { createClient } from "@/lib/supabase";
+import { getFotoProdutoUrl, subirFotoProduto } from "@/lib/supabase-storage";
 import { CATEGORIAS } from "@/lib/categorias";
 import HistoricoPrecoProduto from "@/components/HistoricoPrecoProduto";
 import BarcodeScannerModal from "@/components/BarcodeScannerModal";
+import { useToast } from "@/components/ToastProvider";
 import type { Compra, Produto } from "@/lib/types";
 
 export type FormProduto = {
+  id: string;
   nome: string;
   marca: string;
   peso_volume: string;
@@ -18,6 +22,7 @@ export type FormProduto = {
   ultima_compra_data: string;
   unidade_consumo: string;
   quantidade_unidade_consumo: number;
+  foto_path: string | null;
 };
 
 type Modo = "form" | "substituir" | "excluir";
@@ -35,6 +40,7 @@ export default function ProdutoModal({
   produto,
   outrosProdutos,
   compras,
+  codigoInicial,
   onSalvar,
   onExcluir,
   onSubstituir,
@@ -43,26 +49,48 @@ export default function ProdutoModal({
   produto: Produto | null; // null = criar novo
   outrosProdutos: Produto[];
   compras: Compra[];
+  codigoInicial?: string; // pré-preenche o código de barras ao criar (ex: leitura que não bateu com nenhum produto)
   onSalvar: (form: FormProduto) => void;
   onExcluir: (() => void) | null;
   onSubstituir: ((destinoId: string) => void) | null;
   onFechar: () => void;
 }) {
+  const supabase = useMemo(() => createClient(), []);
+  const mostrarToast = useToast();
+  const fotoInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<FormProduto>(() => ({
+    id: produto?.id ?? crypto.randomUUID(),
     nome: produto?.nome ?? "",
     marca: produto?.marca ?? "",
     peso_volume: produto?.peso_volume ?? "",
     categoria: produto?.categoria ?? "Outros",
-    codigo_barras: produto?.codigo_barras ?? "",
+    codigo_barras: produto?.codigo_barras ?? codigoInicial ?? "",
     estoque_atual: produto?.estoque_atual ?? 0,
     estoque_minimo: produto?.estoque_minimo ?? 0,
     ultima_compra_data: produto?.ultima_compra_data ?? "",
     unidade_consumo: produto?.unidade_consumo ?? "",
     quantidade_unidade_consumo: produto?.quantidade_unidade_consumo ?? 1,
+    foto_path: produto?.foto_path ?? null,
   }));
   const [modo, setModo] = useState<Modo>("form");
   const [destinoId, setDestinoId] = useState("");
   const [scannerAberto, setScannerAberto] = useState(false);
+  const [enviandoFoto, setEnviandoFoto] = useState(false);
+
+  async function lidarComFoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setEnviandoFoto(true);
+    try {
+      const path = await subirFotoProduto(supabase, form.id, file);
+      campo("foto_path", path);
+    } catch (err) {
+      mostrarToast(err instanceof Error ? err.message : "Não consegui enviar essa imagem.");
+    } finally {
+      setEnviandoFoto(false);
+      if (fotoInputRef.current) fotoInputRef.current.value = "";
+    }
+  }
 
   function campo<K extends keyof FormProduto>(k: K, v: FormProduto[K]) {
     setForm((f) => ({ ...f, [k]: v }));
@@ -89,6 +117,36 @@ export default function ProdutoModal({
 
         {modo === "form" && (
           <form onSubmit={confirmarSalvar} className="p-5 space-y-4">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-xl bg-bg border border-border flex-shrink-0 overflow-hidden flex items-center justify-center">
+                {form.foto_path ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={getFotoProdutoUrl(supabase, form.foto_path) ?? undefined}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <ImagePlus size={20} className="text-muted" />
+                )}
+              </div>
+              <div className="flex-1 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => fotoInputRef.current?.click()}
+                  disabled={enviandoFoto}
+                  className="text-xs font-medium border border-border rounded-full px-3 py-1.5 disabled:opacity-50"
+                >
+                  {enviandoFoto ? "Enviando..." : form.foto_path ? "Trocar foto" : "Adicionar foto"}
+                </button>
+                {form.foto_path && (
+                  <button type="button" onClick={() => campo("foto_path", null)} className="text-xs text-danger">
+                    Remover
+                  </button>
+                )}
+                <input ref={fotoInputRef} type="file" accept="image/*" onChange={lidarComFoto} className="hidden" />
+              </div>
+            </div>
             <Campo label="Nome do produto">
               <input
                 required

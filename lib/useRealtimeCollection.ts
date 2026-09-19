@@ -72,5 +72,5 @@ export function useRealtimeCollection<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [carregar]);
 
-  return { data, loading, erro, refetch: carregar };
+  return { data, loading, erro, refetch: carregar, setData };
 }

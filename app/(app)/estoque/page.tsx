@@ -1,13 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, PackagePlus, Pencil, Plus, Search } from "lucide-react";
+import { AlertTriangle, Barcode, PackagePlus, Pencil, Plus, Search } from "lucide-react";
 import { createClient } from "@/lib/supabase";
 import { useRealtimeCollection } from "@/lib/useRealtimeCollection";
 import { useToast } from "@/components/ToastProvider";
 import { mensagemErroSupabase } from "@/lib/supabase-error";
+import { getFotoProdutoUrl } from "@/lib/supabase-storage";
 import ProdutoModal, { type FormProduto } from "@/components/ProdutoModal";
-import type { Categoria, Compra, Produto } from "@/lib/types";
+import RegistrarCompraModal from "@/components/RegistrarCompraModal";
+import BarcodeScannerModal from "@/components/BarcodeScannerModal";
+import type { Categoria, Compra, Mercado, Produto } from "@/lib/types";
 
 export default function Estoque() {
   const supabase = useMemo(() => createClient(), []);
@@ -15,6 +18,9 @@ export default function Estoque() {
   const [busca, setBusca] = useState("");
   const [filtro, setFiltro] = useState<"todos" | "baixo">("todos");
   const [modalProdutoId, setModalProdutoId] = useState<string | "novo" | null>(null);
+  const [codigoNaoEncontrado, setCodigoNaoEncontrado] = useState<string | undefined>(undefined);
+  const [scannerRemessaAberto, setScannerRemessaAberto] = useState(false);
+  const [produtoRemessa, setProdutoRemessa] = useState<Produto | null>(null);
 
   const { data: produtos, loading } = useRealtimeCollection<Produto>(supabase, "produtos", {
     orderBy: { column: "nome" },
@@ -23,6 +29,21 @@ export default function Estoque() {
   const { data: compras } = useRealtimeCollection<Compra>(supabase, "compras", {
     select: "id, produto_id, mercado_id, preco_unitario, data_compra, mercado:mercados(nome)",
   });
+  const { data: mercados } = useRealtimeCollection<Mercado>(supabase, "mercados", {
+    orderBy: { column: "nome" },
+  });
+
+  function lidarComCodigoRemessa(codigo: string) {
+    setScannerRemessaAberto(false);
+    const produto = produtos.find((p) => p.codigo_barras && p.codigo_barras === codigo);
+    if (produto) {
+      setProdutoRemessa(produto);
+    } else {
+      mostrarToast("Nenhum produto com esse código ainda — cadastra ele primeiro");
+      setCodigoNaoEncontrado(codigo);
+      setModalProdutoId("novo");
+    }
+  }
 
   async function atualizarCampo(id: string, campo: "estoque_atual" | "estoque_minimo", valor: number) {
     const { error } = await supabase.from("produtos").update({ [campo]: valor }).eq("id", id);
@@ -48,10 +69,13 @@ export default function Estoque() {
       ultima_compra_data: form.ultima_compra_data || null,
       unidade_consumo: form.unidade_consumo.trim() || null,
       quantidade_unidade_consumo: form.quantidade_unidade_consumo > 0 ? form.quantidade_unidade_consumo : null,
+      foto_path: form.foto_path,
     };
 
     if (modalProdutoId === "novo") {
-      const { error } = await supabase.from("produtos").insert(payload);
+      // usa o id gerado pelo modal (a foto, se enviada, já subiu pro storage
+      // com esse id) em vez de deixar o banco gerar um novo
+      const { error } = await supabase.from("produtos").insert({ id: form.id, ...payload });
       if (error) {
         mostrarToast(mensagemErroSupabase(error)!);
         return;
@@ -115,12 +139,21 @@ export default function Estoque() {
     <div className="max-w-3xl mx-auto px-5 pt-8 md:pt-10">
       <div className="flex items-start justify-between gap-4 mb-1">
         <h1 className="text-2xl font-bold font-display">Estoque</h1>
-        <button
-          onClick={() => setModalProdutoId("novo")}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-full btn-accent text-sm font-medium flex-shrink-0"
-        >
-          <Plus size={14} /> Novo
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={() => setScannerRemessaAberto(true)}
+            title="Ler código de barras pra registrar uma remessa comprada"
+            className="p-2.5 rounded-full border border-border text-muted hover:text-text"
+          >
+            <Barcode size={16} />
+          </button>
+          <button
+            onClick={() => setModalProdutoId("novo")}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-full btn-accent text-sm font-medium"
+          >
+            <Plus size={14} /> Novo
+          </button>
+        </div>
       </div>
       <p className="text-muted text-sm mb-6">{produtos.length} produtos cadastrados</p>
 
@@ -172,16 +205,30 @@ export default function Estoque() {
                 className={`bg-surface border rounded-xl px-4 py-3 ${baixo ? "border-warning/40" : "border-border"}`}
               >
                 <div className="flex items-center justify-between mb-2 gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{p.nome}</p>
-                    <p className="text-xs text-muted truncate flex items-center gap-1.5">
-                      <span
-                        className="w-2 h-2 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: corDaCategoria(p.categoria) }}
+                  <button
+                    type="button"
+                    onClick={() => setModalProdutoId(p.id)}
+                    className="min-w-0 text-left flex items-center gap-2.5"
+                  >
+                    {p.foto_path ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={getFotoProdutoUrl(supabase, p.foto_path) ?? undefined}
+                        alt=""
+                        className="w-9 h-9 rounded-lg object-cover flex-shrink-0"
                       />
-                      {[p.marca, p.peso_volume, p.categoria].filter(Boolean).join(" · ")}
-                    </p>
-                  </div>
+                    ) : null}
+                    <span className="min-w-0">
+                      <p className="text-sm font-medium truncate">{p.nome}</p>
+                      <p className="text-xs text-muted truncate flex items-center gap-1.5">
+                        <span
+                          className="w-2 h-2 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: corDaCategoria(p.categoria) }}
+                        />
+                        {[p.marca, p.peso_volume, p.categoria].filter(Boolean).join(" · ")}
+                      </p>
+                    </span>
+                  </button>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     {baixo && (
                       <span className="text-xs font-medium text-warning bg-warning-bg px-2 py-1 rounded-full">
@@ -236,11 +283,23 @@ export default function Estoque() {
           produto={produtoEmEdicao}
           outrosProdutos={produtos.filter((p) => p.id !== modalProdutoId)}
           compras={compras}
+          codigoInicial={codigoNaoEncontrado}
           onSalvar={salvarProduto}
           onExcluir={produtoEmEdicao ? () => excluirProduto(produtoEmEdicao.id) : null}
           onSubstituir={produtoEmEdicao ? (destinoId) => substituirProduto(produtoEmEdicao.id, destinoId) : null}
-          onFechar={() => setModalProdutoId(null)}
+          onFechar={() => {
+            setModalProdutoId(null);
+            setCodigoNaoEncontrado(undefined);
+          }}
         />
+      )}
+
+      {scannerRemessaAberto && (
+        <BarcodeScannerModal onDetectado={lidarComCodigoRemessa} onFechar={() => setScannerRemessaAberto(false)} />
+      )}
+
+      {produtoRemessa && (
+        <RegistrarCompraModal produto={produtoRemessa} mercados={mercados} onFechar={() => setProdutoRemessa(null)} />
       )}
     </div>
   );

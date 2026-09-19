@@ -53,8 +53,8 @@ export function calcularNotificacoes(produtos: Produto[], compras: Compra[], pre
         lista.push({
           id: `economia-${produtoId}`,
           tipo: "economia",
-          titulo: `${nomeProduto} sai mais barato na ${mercadoBarato}`,
-          descricao: `Última compra: ${formatBRL(ultimo.preco_unitario)} na ${mercadoUltimo}. Na ${mercadoBarato} saiu por ${formatBRL(maisBarato.preco_unitario)} (economia de ${formatBRL(dif)}).`,
+          titulo: `${nomeProduto} sai mais barato no ${mercadoBarato}`,
+          descricao: `Última compra: ${formatBRL(ultimo.preco_unitario)} no ${mercadoUltimo}. No ${mercadoBarato} saiu por ${formatBRL(maisBarato.preco_unitario)} (economia de ${formatBRL(dif)}).`,
         });
       }
     });

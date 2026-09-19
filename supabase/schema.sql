@@ -56,6 +56,7 @@ alter table produtos add column if not exists quantidade_unidade_consumo numeric
 alter table produtos add column if not exists peso_volume text;
 alter table produtos add column if not exists codigo_barras text;
 alter table produtos add column if not exists ultima_compra_data date;
+alter table produtos add column if not exists foto_path text;
 
 create table if not exists compras (
   id uuid primary key default gen_random_uuid(),
@@ -384,6 +385,19 @@ create policy "logos escrita da familia" on storage.objects
   for all to authenticated
   using (bucket_id = 'logos-mercados' and private.eh_da_familia())
   with check (bucket_id = 'logos-mercados' and private.eh_da_familia());
+
+-- 6b. Storage: bucket público para fotos de produto --------------------------
+
+insert into storage.buckets (id, name, public)
+values ('fotos-produtos', 'fotos-produtos', true)
+on conflict (id) do nothing;
+
+drop policy if exists "fotos produto escrita da familia" on storage.objects;
+
+create policy "fotos produto escrita da familia" on storage.objects
+  for all to authenticated
+  using (bucket_id = 'fotos-produtos' and private.eh_da_familia())
+  with check (bucket_id = 'fotos-produtos' and private.eh_da_familia());
 
 -- 7. Realtime: garante que toda tabela emite postgres_changes ---------------
 -- (é isso que substitui o polling — sem isso, edições feitas num aparelho

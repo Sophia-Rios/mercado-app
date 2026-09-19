@@ -28,6 +28,7 @@ export type Produto = {
   // cada um com seu próprio valor aqui — não precisa de conversão dinâmica.
   unidade_consumo: string | null
   quantidade_unidade_consumo: number | null
+  foto_path: string | null
 }
 
 export type Compra = {

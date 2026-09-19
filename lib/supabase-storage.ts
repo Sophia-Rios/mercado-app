@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const BUCKET_LOGOS = "logos-mercados";
+const BUCKET_FOTOS_PRODUTOS = "fotos-produtos";
 
 export function getLogoUrl(supabase: SupabaseClient, logoPath: string | null): string | null {
   if (!logoPath) return null;
@@ -50,6 +51,25 @@ export async function subirLogoMercado(
   const path = `${mercadoId}.jpg`;
   const { error } = await supabase.storage
     .from(BUCKET_LOGOS)
+    .upload(path, blob, { upsert: true, contentType: "image/jpeg" });
+  if (error) throw error;
+  return path;
+}
+
+export function getFotoProdutoUrl(supabase: SupabaseClient, fotoPath: string | null): string | null {
+  if (!fotoPath) return null;
+  return supabase.storage.from(BUCKET_FOTOS_PRODUTOS).getPublicUrl(fotoPath).data.publicUrl;
+}
+
+export async function subirFotoProduto(
+  supabase: SupabaseClient,
+  produtoId: string,
+  file: File
+): Promise<string> {
+  const blob = await comprimirImagemParaLogo(file, 480);
+  const path = `${produtoId}.jpg`;
+  const { error } = await supabase.storage
+    .from(BUCKET_FOTOS_PRODUTOS)
     .upload(path, blob, { upsert: true, contentType: "image/jpeg" });
   if (error) throw error;
   return path;

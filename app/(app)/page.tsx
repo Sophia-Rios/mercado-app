@@ -169,7 +169,13 @@ export default function Dashboard() {
                     <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="mes" axisLine={false} tickLine={false} tick={{ fill: "var(--muted)", fontSize: 12 }} />
+                <XAxis
+                  dataKey="mes"
+                  axisLine={false}
+                  tickLine={false}
+                  interval={0}
+                  tick={{ fill: "var(--muted)", fontSize: 12 }}
+                />
                 <Tooltip
                   formatter={(value) => [formatBRL(Number(value)), "Gasto"]}
                   contentStyle={{
@@ -180,7 +186,15 @@ export default function Dashboard() {
                   }}
                   labelStyle={{ color: "var(--text)" }}
                 />
-                <Area type="monotone" dataKey="total" stroke="var(--accent)" strokeWidth={2} fill="url(#fillGasto)" />
+                <Area
+                  type="monotone"
+                  dataKey="total"
+                  stroke="var(--accent)"
+                  strokeWidth={2}
+                  fill="url(#fillGasto)"
+                  dot={{ fill: "var(--accent)", strokeWidth: 0, r: 4 }}
+                  activeDot={{ r: 5 }}
+                />
               </AreaChart>
             </ResponsiveContainer>
           )}

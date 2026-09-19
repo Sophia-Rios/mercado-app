@@ -14,7 +14,7 @@ export default function ListaCompras() {
   const mostrarToast = useToast();
   const [busca, setBusca] = useState("");
 
-  const { data: itens } = useRealtimeCollection<ItemLista>(supabase, "lista_compras", {
+  const { data: itens, setData: setItens } = useRealtimeCollection<ItemLista>(supabase, "lista_compras", {
     select: "*, produto:produtos(*)",
     orderBy: { column: "criado_em" },
   });
@@ -34,7 +34,9 @@ export default function ListaCompras() {
 
   const pendentes = itens.filter((i) => !i.comprado);
   const comprados = itens.filter((i) => i.comprado);
-  const estimativa = pendentes.reduce((sum, item) => sum + (ultimoPreco.get(item.produto_id) ?? 0) * item.quantidade_desejada, 0);
+  // soma todos os itens, não só os pendentes — marcar um item como comprado
+  // não deve derrubar o total previsto até a compra ser finalizada de fato
+  const estimativa = itens.reduce((sum, item) => sum + (ultimoPreco.get(item.produto_id) ?? 0) * item.quantidade_desejada, 0);
 
   const produtosFiltrados = produtos.filter((p) => {
     if (busca.length === 0 || itens.some((i) => i.produto_id === p.id)) return false;
@@ -66,13 +68,28 @@ export default function ListaCompras() {
   }
 
   async function toggleComprado(item: ItemLista) {
+    // atualiza a marcação na hora, sem esperar o vai-e-volta do banco +
+    // realtime — é isso que fazia o toque parecer lento
+    setItens((prev) => prev.map((i) => (i.id === item.id ? { ...i, comprado: !i.comprado } : i)));
     const { error } = await supabase.from("lista_compras").update({ comprado: !item.comprado }).eq("id", item.id);
-    if (error) mostrarToast(mensagemErroSupabase(error)!);
+    if (error) {
+      setItens((prev) => prev.map((i) => (i.id === item.id ? { ...i, comprado: item.comprado } : i)));
+      mostrarToast(mensagemErroSupabase(error)!);
+    }
   }
 
   async function removerItem(id: string) {
     const { error } = await supabase.from("lista_compras").delete().eq("id", id);
     if (error) mostrarToast(mensagemErroSupabase(error)!);
+  }
+
+  async function finalizarCompra() {
+    const { error } = await supabase.from("lista_compras").delete().eq("comprado", true);
+    if (error) {
+      mostrarToast(mensagemErroSupabase(error)!);
+      return;
+    }
+    mostrarToast("Compra finalizada");
   }
 
   async function alterarQuantidade(item: ItemLista, delta: number) {
@@ -146,7 +163,7 @@ export default function ListaCompras() {
       </div>
 
       {/* estimativa estilo recibo */}
-      {pendentes.length > 0 && (
+      {itens.length > 0 && (
         <div className="bg-surface border border-border rounded-2xl p-5 mb-6">
           <div className="flex items-center justify-between text-sm text-muted mb-2">
             <span>Estimativa (base: último preço)</span>
@@ -202,7 +219,15 @@ export default function ListaCompras() {
 
           {comprados.length > 0 && (
             <div>
-              <p className="text-xs uppercase tracking-wide text-muted mb-2 font-medium">Já no carrinho</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs uppercase tracking-wide text-muted font-medium">Já no carrinho</p>
+                <button
+                  onClick={finalizarCompra}
+                  className="flex items-center gap-1.5 text-xs font-medium text-accent"
+                >
+                  <Check size={13} /> Finalizar compra
+                </button>
+              </div>
               <ul className="space-y-2">
                 {comprados.map((item) => (
                   <li
