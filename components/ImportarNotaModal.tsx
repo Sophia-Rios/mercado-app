@@ -9,6 +9,7 @@ import { CATEGORIAS } from "@/lib/categorias";
 import { formatBRL, formatDataBR } from "@/lib/format";
 import { parseNotaTexto, type NotaFiscal } from "@/lib/nfce";
 import { extrairTextoPdf } from "@/lib/pdf-texto";
+import { acharCategoria, acharMarca, extrairPeso, limparNome } from "@/lib/nfce-heuristica";
 import type { LinhaImportada } from "@/lib/import-compras";
 import { useToast } from "@/components/ToastProvider";
 import BarcodeScannerModal from "@/components/BarcodeScannerModal";
@@ -111,6 +112,9 @@ export default function ImportarNotaModal({ onFechar }: { onFechar: () => void }
         .eq("mercado_id", mercadoConhecido.id);
       codigosConhecidos = new Map((data ?? []).map((c) => [c.codigo as string, c.produto_id as string]));
     }
+    const marcasConhecidas = Array.from(
+      new Set((produtosBanco ?? []).map((p) => ((p.marca as string | null) ?? "").trim()).filter(Boolean))
+    );
     const produtoPorId = new Map((produtosBanco ?? []).map((p) => [p.id as string, p]));
 
     // a nota repete a linha a cada unidade — junta por código do mercado
@@ -149,7 +153,7 @@ export default function ImportarNotaModal({ onFechar }: { onFechar: () => void }
       } else {
         aviso =
           jsonIA?.erro === "sem_chave"
-            ? "A interpretação automática (IA) ainda não está ligada, então os nomes abaixo vieram direto da nota. Revise antes de confirmar."
+            ? "A interpretação automática (IA) ainda não está ligada. Peso, marca e categoria foram deduzidos por regras simples e os nomes vieram da nota — revise antes de confirmar."
             : "Não consegui interpretar os itens automaticamente. Os nomes vieram direto da nota — revise antes de confirmar.";
       }
     }
@@ -174,15 +178,18 @@ export default function ImportarNotaModal({ onFechar }: { onFechar: () => void }
         };
       }
       const ia = interpretados.get(codigo);
+      // sem IA: deduz peso, marca (entre as já cadastradas) e categoria por regras
+      const pesoRegra = extrairPeso(i.descricao);
+      const marcaRegra = acharMarca(i.descricao, marcasConhecidas);
       return {
         id: codigo,
         codigos: [codigo],
         descricao: i.descricao,
         produtoId: null,
-        nome: ia?.nome || titulo(i.descricao),
-        marca: ia?.marca ?? "",
-        categoria: ia?.categoria ?? "Outros",
-        pesoVolume: ia?.peso_volume ?? "",
+        nome: ia?.nome || limparNome(i.descricao, marcaRegra, pesoRegra) || titulo(i.descricao),
+        marca: ia ? ia.marca : marcaRegra,
+        categoria: ia ? ia.categoria : acharCategoria(i.descricao, i.unidade),
+        pesoVolume: ia ? ia.peso_volume : pesoRegra,
         quantidade: i.quantidade,
         total: arredondar(i.total),
         incluir: true,
@@ -475,10 +482,16 @@ export default function ImportarNotaModal({ onFechar }: { onFechar: () => void }
                         placeholder="Marca"
                         className="px-2.5 py-2 rounded-lg bg-bg border border-border text-sm"
                       />
+                      <input
+                        value={l.pesoVolume}
+                        onChange={(e) => atualizar(l.id, { pesoVolume: e.target.value })}
+                        placeholder="Peso / volume"
+                        className="px-2.5 py-2 rounded-lg bg-bg border border-border text-sm"
+                      />
                       <select
                         value={l.categoria}
                         onChange={(e) => atualizar(l.id, { categoria: e.target.value })}
-                        className="px-2.5 py-2 rounded-lg bg-bg border border-border text-sm"
+                        className="col-span-2 px-2.5 py-2 rounded-lg bg-bg border border-border text-sm"
                       >
                         {CATEGORIAS.map((c) => (
                           <option key={c} value={c}>
