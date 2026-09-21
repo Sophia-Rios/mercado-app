@@ -9,6 +9,9 @@ export type LinhaImportada = {
   precoUnitario: number | null;
   precoTotal: number | null;
   erros: string[];
+  pesoVolume?: string;
+  // quando já se sabe qual produto é (ex: código da nota já conhecido), pula o match por nome+marca
+  produtoId?: string;
 };
 
 export type ResultadoImportacao = { erro: string } | { linhas: LinhaImportada[] };

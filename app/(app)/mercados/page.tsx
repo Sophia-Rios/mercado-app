@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Pencil, Plus, ChevronRight } from "lucide-react";
+import { Pencil, Plus, ChevronRight, QrCode } from "lucide-react";
 import { createClient } from "@/lib/supabase";
 import { useRealtimeCollection } from "@/lib/useRealtimeCollection";
 import { resumoMercado } from "@/lib/mercado-calc";
@@ -10,6 +10,7 @@ import { formatBRL } from "@/lib/format";
 import MercadoAvatar from "@/components/MercadoAvatar";
 import BadgeTendencia from "@/components/BadgeTendencia";
 import MercadoModal from "@/components/MercadoModal";
+import ImportarNotaModal from "@/components/ImportarNotaModal";
 import type { Mercado, Compra } from "@/lib/types";
 
 export default function MercadosPage() {
@@ -25,6 +26,7 @@ export default function MercadosPage() {
     { select: "id, produto_id, mercado_id, quantidade, preco_unitario, preco_total, data_compra" }
   );
   const [editando, setEditando] = useState<Mercado | "novo" | null>(null);
+  const [importandoNota, setImportandoNota] = useState(false);
 
   const resumos = useMemo(
     () =>
@@ -41,12 +43,20 @@ export default function MercadosPage() {
     <div className="max-w-2xl mx-auto px-5 pt-8 md:pt-12 pb-8">
       <div className="flex items-start justify-between gap-4 mb-1">
         <h1 className="text-3xl md:text-4xl font-bold font-display">Mercados</h1>
-        <button
-          onClick={() => setEditando("novo")}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-full btn-accent text-sm font-medium flex-shrink-0"
-        >
-          <Plus size={14} /> Novo
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={() => setImportandoNota(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-full btn-accent text-sm font-medium"
+          >
+            <QrCode size={14} /> Ler nota
+          </button>
+          <button
+            onClick={() => setEditando("novo")}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-full border border-border text-sm font-medium"
+          >
+            <Plus size={14} /> Novo
+          </button>
+        </div>
       </div>
       <p className="text-muted text-sm mb-6">
         Compare gasto, ticket médio e tendência de preço entre onde você compra
@@ -88,6 +98,8 @@ export default function MercadosPage() {
           )}
         </div>
       )}
+
+      {importandoNota && <ImportarNotaModal onFechar={() => setImportandoNota(false)} />}
 
       {editando && (
         <MercadoModal mercado={editando === "novo" ? null : editando} onFechar={() => setEditando(null)} />

@@ -4,6 +4,7 @@ export type Mercado = {
   cor: string
   logo_path: string | null
   endereco: string | null
+  cnpj: string | null
 }
 
 export type Produto = {

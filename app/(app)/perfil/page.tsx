@@ -12,6 +12,7 @@ import { formatDataBR } from "@/lib/format";
 import { CATEGORIAS } from "@/lib/categorias";
 import PrefToggle from "@/components/PrefToggle";
 import ImportarModal from "@/components/ImportarModal";
+import ImportarNotaModal from "@/components/ImportarNotaModal";
 import type { Categoria, Convite, MembroFamilia, UsuarioPreferencias } from "@/lib/types";
 
 export default function PerfilPage() {
@@ -37,6 +38,7 @@ export default function PerfilPage() {
   const [novoPapel, setNovoPapel] = useState<"Administrador" | "Membro">("Membro");
   const [gerandoConvite, setGerandoConvite] = useState(false);
   const [modalImportar, setModalImportar] = useState(false);
+  const [modalNota, setModalNota] = useState(false);
 
   useEffect(() => {
     if (prefs) setNome(prefs.nome);
@@ -308,6 +310,14 @@ export default function PerfilPage() {
       <div className="surface-card p-5">
         <p className="text-sm font-medium mb-3">Dados</p>
         <button
+          onClick={() => setModalNota(true)}
+          className="w-full text-left text-sm text-text py-2 flex items-center justify-between"
+        >
+          Importar nota fiscal (QR Code)
+          <ChevronRight size={15} className="text-muted" />
+        </button>
+        <div className="h-px bg-border my-1" />
+        <button
           onClick={() => setModalImportar(true)}
           className="w-full text-left text-sm text-text py-2 flex items-center justify-between"
         >
@@ -333,6 +343,7 @@ export default function PerfilPage() {
       </div>
 
       {modalImportar && <ImportarModal onFechar={() => setModalImportar(false)} />}
+      {modalNota && <ImportarNotaModal onFechar={() => setModalNota(false)} />}
     </div>
   );
 }

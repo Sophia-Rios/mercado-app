@@ -31,6 +31,9 @@ create table if not exists mercados (
 alter table mercados add column if not exists cor text not null default '#9CA3AF';
 alter table mercados add column if not exists logo_path text;
 alter table mercados add column if not exists endereco text;
+-- CNPJ do emitente da nota fiscal: é como o app reconhece o mercado sozinho
+-- na próxima vez que ler o QR Code de uma nota dele
+alter table mercados add column if not exists cnpj text;
 
 create table if not exists produtos (
   id uuid primary key default gen_random_uuid(),
@@ -79,6 +82,25 @@ alter table compras drop constraint if exists compras_produto_id_fkey;
 alter table compras
   add constraint compras_produto_id_fkey
   foreign key (produto_id) references produtos(id) on delete set null;
+
+-- notas fiscais já importadas pelo QR Code (impede importar a mesma nota 2x)
+create table if not exists notas_fiscais (
+  chave text primary key, -- cnpj-modelo-serie-numero
+  mercado_id uuid references mercados(id) on delete set null,
+  data_emissao date not null,
+  valor_total numeric,
+  importada_em timestamptz not null default now()
+);
+
+-- memória "código do produto no mercado" -> produto do app. O código que
+-- vem na nota (ex: 46457) é fixo pra cada produto naquele mercado, então
+-- depois da primeira vez o app reconhece o item sem precisar interpretar
+create table if not exists codigos_mercado (
+  mercado_id uuid not null references mercados(id) on delete cascade,
+  codigo text not null,
+  produto_id uuid not null references produtos(id) on delete cascade,
+  primary key (mercado_id, codigo)
+);
 
 create table if not exists lista_compras (
   id uuid primary key default gen_random_uuid(),
@@ -312,6 +334,8 @@ alter table familia enable row level security;
 alter table usuario_preferencias enable row level security;
 alter table notificacoes_lidas enable row level security;
 alter table convites enable row level security;
+alter table notas_fiscais enable row level security;
+alter table codigos_mercado enable row level security;
 
 -- limpa nomes de política de qualquer tentativa anterior (as tentativas já
 -- feitas nesse projeto usaram "authenticated full access" e "acesso da
@@ -349,6 +373,10 @@ create policy "familia autenticada" on lista_compras for all to authenticated us
 create policy "familia autenticada" on categorias for all to authenticated using (private.eh_da_familia()) with check (private.eh_da_familia());
 create policy "familia autenticada" on usuario_preferencias for all to authenticated using (private.eh_da_familia()) with check (private.eh_da_familia());
 create policy "familia autenticada" on notificacoes_lidas for all to authenticated using (private.eh_da_familia()) with check (private.eh_da_familia());
+drop policy if exists "familia autenticada" on notas_fiscais;
+create policy "familia autenticada" on notas_fiscais for all to authenticated using (private.eh_da_familia()) with check (private.eh_da_familia());
+drop policy if exists "familia autenticada" on codigos_mercado;
+create policy "familia autenticada" on codigos_mercado for all to authenticated using (private.eh_da_familia()) with check (private.eh_da_familia());
 
 -- familia: todo mundo da família vê a lista toda (organizacional), mas só
 -- Administrador edita papel ou remove alguém. Não existe política de
