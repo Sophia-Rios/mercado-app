@@ -135,6 +135,12 @@ export default function PerfilPage() {
       mostrarToast(mensagemErroSupabase(erroProdutos)!);
       return;
     }
+    // sem isso, notas já importadas continuariam bloqueadas mesmo com as compras apagadas
+    const { error: erroNotas } = await supabase.from("notas_fiscais").delete().not("chave", "is", null);
+    if (erroNotas) {
+      mostrarToast(mensagemErroSupabase(erroNotas)!);
+      return;
+    }
     mostrarToast("Dados resetados");
   }
 
