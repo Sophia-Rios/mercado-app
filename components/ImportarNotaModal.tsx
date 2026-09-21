@@ -9,7 +9,7 @@ import { CATEGORIAS } from "@/lib/categorias";
 import { formatBRL, formatDataBR } from "@/lib/format";
 import { parseNotaTexto, type NotaFiscal } from "@/lib/nfce";
 import { extrairTextoPdf } from "@/lib/pdf-texto";
-import { acharCategoria, acharMarca, extrairPeso, limparNome } from "@/lib/nfce-heuristica";
+import { acharCategoria, acharMarca, buscarNoCatalogo, extrairPeso, limparNome } from "@/lib/nfce-heuristica";
 import type { LinhaImportada } from "@/lib/import-compras";
 import { useToast } from "@/components/ToastProvider";
 import BarcodeScannerModal from "@/components/BarcodeScannerModal";
@@ -153,7 +153,7 @@ export default function ImportarNotaModal({ onFechar }: { onFechar: () => void }
       } else {
         aviso =
           jsonIA?.erro === "sem_chave"
-            ? "A interpretação automática (IA) ainda não está ligada. Peso, marca e categoria foram deduzidos por regras simples e os nomes vieram da nota — revise antes de confirmar."
+            ? "Modo manual: nomes, marca, peso e categoria foram deduzidos pelo app (reaproveitando seus produtos). Revise os itens — o que você corrigir aqui o app lembra nas próximas notas."
             : "Não consegui interpretar os itens automaticamente. Os nomes vieram direto da nota — revise antes de confirmar.";
       }
     }
@@ -181,14 +181,15 @@ export default function ImportarNotaModal({ onFechar }: { onFechar: () => void }
       // sem IA: deduz peso, marca (entre as já cadastradas) e categoria por regras
       const pesoRegra = extrairPeso(i.descricao);
       const marcaRegra = acharMarca(i.descricao, marcasConhecidas);
+      const igual = ia ? null : buscarNoCatalogo(i.descricao, marcaRegra, produtosBanco ?? []);
       return {
         id: codigo,
         codigos: [codigo],
         descricao: i.descricao,
         produtoId: null,
-        nome: ia?.nome || limparNome(i.descricao, marcaRegra, pesoRegra) || titulo(i.descricao),
+        nome: ia?.nome || igual?.nome || limparNome(i.descricao, marcaRegra, pesoRegra) || titulo(i.descricao),
         marca: ia ? ia.marca : marcaRegra,
-        categoria: ia ? ia.categoria : acharCategoria(i.descricao, i.unidade),
+        categoria: ia ? ia.categoria : (igual?.categoria ?? acharCategoria(i.descricao, i.unidade)),
         pesoVolume: ia ? ia.peso_volume : pesoRegra,
         quantidade: i.quantidade,
         total: arredondar(i.total),
