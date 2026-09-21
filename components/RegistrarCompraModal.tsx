@@ -22,11 +22,13 @@ export default function RegistrarCompraModal({
   const supabase = useMemo(() => createClient(), []);
   const mostrarToast = useToast();
   const [mercadoId, setMercadoId] = useState(mercados[0]?.id ?? "");
-  const [quantidade, setQuantidade] = useState(1);
+  // texto, não número: assim dá pra apagar o campo e digitar outro valor
+  const [quantidadeTexto, setQuantidadeTexto] = useState("1");
   const [preco, setPreco] = useState("");
   const [data, setData] = useState(() => new Date().toISOString().slice(0, 10));
   const [salvando, setSalvando] = useState(false);
 
+  const quantidade = Number(quantidadeTexto.replace(",", "."));
   const porEmbalagem = produto.quantidade_unidade_consumo ?? 1;
   const precoNumero = Number(preco.replace(",", "."));
   const podeConfirmar = mercadoId && quantidade > 0 && precoNumero > 0 && data;
@@ -112,10 +114,9 @@ export default function RegistrarCompraModal({
                 {porEmbalagem > 1 ? "Embalagens compradas" : "Quantidade"}
               </span>
               <input
-                type="number"
-                min={1}
-                value={quantidade}
-                onChange={(e) => setQuantidade(Math.max(1, Number(e.target.value)))}
+                inputMode="decimal"
+                value={quantidadeTexto}
+                onChange={(e) => setQuantidadeTexto(e.target.value)}
                 className="w-full px-3 py-2.5 rounded-lg bg-bg border border-border text-sm font-data"
               />
             </label>
