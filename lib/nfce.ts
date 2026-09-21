@@ -21,35 +21,6 @@ function numero(str: string): number {
   return Number(s);
 }
 
-// o site da Fazenda só entrega a nota pra links dela mesma; barrar qualquer
-// outro host evita que essa rota vire um proxy aberto pra internet
-export function urlNfceValida(url: string): URL | null {
-  try {
-    const u = new URL(url.trim());
-    if (u.protocol !== "https:" && u.protocol !== "http:") return null;
-    u.protocol = "https:";
-    if (!/(^|\.)fazenda\.[a-z]{2}\.gov\.br$/i.test(u.hostname) && !/(^|\.)sefaz\.[a-z.]*gov\.br$/i.test(u.hostname))
-      return null;
-    return u;
-  } catch {
-    return null;
-  }
-}
-
-export function htmlParaTexto(html: string): string {
-  return html
-    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, " ")
-    .replace(/<br\s*\/?>|<\/(p|div|tr|td|th|li|h\d|span|label)>/gi, "\n")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
-    .replace(/[ \t]+/g, " ");
-}
-
 const RUIDO = [/^https?:\/\/\S+/i, /^P[áa]gina \d+ de \d+$/i, /Filtar [ií]tens/i, /^\d{2}\/\d{2}\/\d{4},? \d{2}:\d{2}$/];
 
 export function parseNotaTexto(bruto: string): NotaFiscal | { erro: string } {
@@ -57,7 +28,15 @@ export function parseNotaTexto(bruto: string): NotaFiscal | { erro: string } {
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter((l) => l && !RUIDO.some((r) => r.test(l)));
-  const texto = linhas.join(" ").replace(/\s+/g, " ");
+  // a quebra de página do PDF corta um item no meio: o rodapé entra entre a
+  // descrição e os valores, e os campos chegam fora de ordem. Reconstrói.
+  const texto = linhas
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .replace(
+      /(\S[^()]*?) Qtde total de UN: ?Valor total R\$: ?\(Código: (\d+)\) ítens: ([\d.,]+) (\S+?) ?R\$ ([\d.,]+)/g,
+      "$1 (Código: $2) Qtde total de ítens: $3 UN: $4 Valor total R$: R$ $5"
+    );
 
   const cnpj = texto.match(/CNPJ:?\s*(\d{14})/)?.[1] ?? texto.match(/\b(\d{14})\b/)?.[1] ?? "";
   const razaoSocial = (texto.match(/NFC-e\)\s*(.+?)\s*CNPJ/)?.[1] ?? "").trim();

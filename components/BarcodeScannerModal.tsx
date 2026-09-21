@@ -7,9 +7,11 @@ import { BrowserMultiFormatReader, type IScannerControls } from "@zxing/browser"
 export default function BarcodeScannerModal({
   onDetectado,
   onFechar,
+  tipo = "codigo",
 }: {
   onDetectado: (codigo: string) => void;
   onFechar: () => void;
+  tipo?: "codigo" | "qr";
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsRef = useRef<IScannerControls | null>(null);
@@ -53,7 +55,7 @@ export default function BarcodeScannerModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <p className="font-medium">Ler código de barras</p>
+          <p className="font-medium">{tipo === "qr" ? "Ler QR Code" : "Ler código de barras"}</p>
           <button onClick={onFechar} className="p-1 text-muted hover:text-text">
             <X size={18} />
           </button>
@@ -66,11 +68,15 @@ export default function BarcodeScannerModal({
           ) : (
             <>
               <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
-              <div className="absolute inset-x-8 top-1/2 -translate-y-1/2 h-20 border-2 border-white/70 rounded-lg pointer-events-none" />
+              <div
+                className={`absolute border-2 border-white/70 rounded-lg pointer-events-none ${
+                  tipo === "qr" ? "inset-12" : "inset-x-8 top-1/2 -translate-y-1/2 h-20"
+                }`}
+              />
             </>
           )}
         </div>
-        <p className="px-5 py-3 text-xs text-muted text-center">Aponte a câmera pro código de barras do produto.</p>
+        <p className="px-5 py-3 text-xs text-muted text-center">{tipo === "qr" ? "Aponte a câmera pro QR Code da nota fiscal." : "Aponte a câmera pro código de barras do produto."}</p>
       </div>
     </div>
   );

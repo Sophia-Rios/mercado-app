@@ -1,13 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Camera, Check, X } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { Camera, Check, FileUp, X } from "lucide-react";
 import { createClient } from "@/lib/supabase";
 import { gravarCompras } from "@/lib/import-db";
 import { mensagemErroSupabase } from "@/lib/supabase-error";
 import { CATEGORIAS } from "@/lib/categorias";
 import { formatBRL, formatDataBR } from "@/lib/format";
-import type { NotaFiscal } from "@/lib/nfce";
+import { parseNotaTexto, type NotaFiscal } from "@/lib/nfce";
+import { extrairTextoPdf } from "@/lib/pdf-texto";
 import type { LinhaImportada } from "@/lib/import-compras";
 import { useToast } from "@/components/ToastProvider";
 import BarcodeScannerModal from "@/components/BarcodeScannerModal";
@@ -47,6 +48,7 @@ export default function ImportarNotaModal({ onFechar }: { onFechar: () => void }
   const [scannerAberto, setScannerAberto] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [mostrarColar, setMostrarColar] = useState(false);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
   const [mensagemLendo, setMensagemLendo] = useState("Lendo a nota...");
   const [avisoIA, setAvisoIA] = useState<string | null>(null);
 
@@ -57,24 +59,28 @@ export default function ImportarNotaModal({ onFechar }: { onFechar: () => void }
   const [nomeNovoMercado, setNomeNovoMercado] = useState("");
   const [salvando, setSalvando] = useState(false);
 
-  async function processar(payload: { url?: string; texto?: string }) {
+  async function processar(fonte: { arquivo?: File; texto?: string }) {
     setErro(null);
     setPasso("lendo");
-    setMensagemLendo("Lendo a nota na Fazenda...");
+    setMensagemLendo("Lendo a nota...");
 
-    const res = await fetch("/api/nfce/ler", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
-    }).catch(() => null);
-    const json = res ? await res.json().catch(() => null) : null;
-    if (!res || !res.ok || !json || json.erro) {
-      setErro(json?.erro ?? "Não consegui ler a nota. Confira a conexão e tente de novo.");
-      if (json?.colar || !res) setMostrarColar(true);
+    let texto = fonte.texto ?? "";
+    if (fonte.arquivo) {
+      try {
+        texto = await extrairTextoPdf(fonte.arquivo);
+      } catch {
+        setErro("Não consegui abrir esse PDF. Confira se é o PDF da nota fiscal.");
+        setPasso("ler");
+        return;
+      }
+    }
+    const resultadoLeitura = parseNotaTexto(texto);
+    if ("erro" in resultadoLeitura) {
+      setErro("Não achei os itens da nota nesse arquivo. Confira se é o PDF (ou o texto) da nota fiscal completa.");
       setPasso("ler");
       return;
     }
-    const lida = json as NotaFiscal;
+    const lida: NotaFiscal = resultadoLeitura;
 
     // nota já importada antes?
     if (lida.chave) {
@@ -195,8 +201,13 @@ export default function ImportarNotaModal({ onFechar }: { onFechar: () => void }
 
   function iniciarLeitura() {
     const texto = entrada.trim();
-    if (!texto) return;
-    processar(/^https?:\/\//i.test(texto) ? { url: texto } : { texto });
+    if (texto) processar({ texto });
+  }
+
+  function escolherPdf(e: React.ChangeEvent<HTMLInputElement>) {
+    const arquivo = e.target.files?.[0];
+    if (arquivo) processar({ arquivo });
+    e.target.value = "";
   }
 
   function atualizar(id: string, campos: Partial<Linha>) {
@@ -317,26 +328,38 @@ export default function ImportarNotaModal({ onFechar }: { onFechar: () => void }
         {passo === "ler" && (
           <div className="p-5 space-y-4">
             <p className="text-sm text-muted">
-              Leia o QR Code da nota fiscal do mercado. O app abre a nota na Fazenda, separa os itens e organiza nome,
-              marca e categoria pra você só conferir.
+              Salve a nota fiscal como PDF e envie aqui. O app lê os itens e organiza nome, marca e categoria pra você só
+              conferir.
             </p>
-            <button
-              onClick={() => setScannerAberto(true)}
-              className="w-full btn-accent rounded-full py-3 text-sm font-medium flex items-center justify-center gap-2"
-            >
-              <Camera size={16} /> Ler QR Code da nota
-            </button>
+            <ol className="text-xs text-muted space-y-1 list-decimal pl-4">
+              <li>Leia o QR Code da nota (abre o site da Fazenda) e resolva a verificação.</li>
+              <li>Na nota aberta, use Imprimir → Salvar como PDF.</li>
+              <li>Volte aqui e envie o PDF.</li>
+            </ol>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setScannerAberto(true)}
+                className="border border-border rounded-full py-3 text-sm font-medium flex items-center justify-center gap-2"
+              >
+                <Camera size={16} /> Ler QR Code
+              </button>
+              <button
+                onClick={() => pdfInputRef.current?.click()}
+                className="btn-accent rounded-full py-3 text-sm font-medium flex items-center justify-center gap-2"
+              >
+                <FileUp size={16} /> Enviar PDF
+              </button>
+            </div>
+            <input ref={pdfInputRef} type="file" accept="application/pdf,.pdf" onChange={escolherPdf} className="hidden" />
             {erro && <p className="text-sm text-danger">{erro}</p>}
 
             {!mostrarColar ? (
               <button onClick={() => setMostrarColar(true)} className="text-xs text-muted underline">
-                Prefiro colar o link ou o texto da nota
+                Prefiro colar o texto da nota
               </button>
             ) : (
               <div className="space-y-2">
-                <p className="text-xs text-muted">
-                  Cole o link do QR Code, ou abra a nota no navegador, copie todo o texto da página e cole aqui.
-                </p>
+                <p className="text-xs text-muted">Copie todo o texto da página da nota e cole aqui.</p>
                 <textarea
                   value={entrada}
                   onChange={(e) => setEntrada(e.target.value)}
@@ -485,9 +508,15 @@ export default function ImportarNotaModal({ onFechar }: { onFechar: () => void }
 
       {scannerAberto && (
         <BarcodeScannerModal
+          tipo="qr"
           onDetectado={(texto) => {
             setScannerAberto(false);
-            processar({ url: texto });
+            if (/^https?:\/\//i.test(texto)) {
+              window.open(texto, "_blank", "noopener");
+              mostrarToast("Nota aberta. Salve como PDF e volte aqui pra enviar.");
+            } else {
+              setErro("Esse QR Code não parece ser de uma nota fiscal.");
+            }
           }}
           onFechar={() => setScannerAberto(false)}
         />
