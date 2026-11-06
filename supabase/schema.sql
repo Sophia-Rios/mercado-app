@@ -112,6 +112,10 @@ create table if not exists lista_compras (
   comprado boolean not null default false,
   criado_em timestamptz not null default now()
 );
+-- posição do item na lista (o usuário organiza pelos corredores do mercado).
+-- Itens novos entram no fim: o padrão é o instante da criação.
+alter table lista_compras add column if not exists ordem numeric default (extract(epoch from now()));
+update lista_compras set ordem = extract(epoch from criado_em) where ordem is null;
 
 create table if not exists categorias (
   nome text primary key,

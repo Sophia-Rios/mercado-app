@@ -52,6 +52,7 @@ export type ItemLista = {
   quantidade_desejada: number
   comprado: boolean
   criado_em: string
+  ordem?: number | null
   produto?: Produto
 }
 

@@ -1,13 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase";
 import { useRealtimeCollection } from "@/lib/useRealtimeCollection";
 import { useToast } from "@/components/ToastProvider";
 import { mensagemErroSupabase } from "@/lib/supabase-error";
 import { formatBRL } from "@/lib/format";
 import type { Compra, ItemLista, Produto } from "@/lib/types";
-import { Plus, Check, Copy, Eraser } from "lucide-react";
+import { Plus, Check, Copy, Eraser, GripVertical } from "lucide-react";
 import SwipeRow from "@/components/SwipeRow";
 
 export default function ListaCompras() {
@@ -33,8 +33,11 @@ export default function ListaCompras() {
     return map;
   }, [compras]);
 
-  const pendentes = itens.filter((i) => !i.comprado);
-  const comprados = itens.filter((i) => i.comprado);
+  // posição manual; sem ela, vale a ordem em que foram adicionados
+  const posicao = (i: ItemLista) => Number(i.ordem ?? Date.parse(i.criado_em) / 1000);
+  const ordenados = useMemo(() => [...itens].sort((a, b) => posicao(a) - posicao(b)), [itens]);
+  const pendentes = ordenados.filter((i) => !i.comprado);
+  const comprados = ordenados.filter((i) => i.comprado);
   // soma todos os itens, não só os pendentes — marcar um item como comprado
   // não deve derrubar o total previsto até a compra ser finalizada de fato
   const estimativa = itens.reduce((sum, item) => sum + (ultimoPreco.get(item.produto_id) ?? 0) * item.quantidade_desejada, 0);
@@ -136,6 +139,78 @@ export default function ListaCompras() {
     }
   }
 
+  // reordenar arrastando pela alça: durante o arrasto só movemos a tela;
+  // ao soltar, renumera os pendentes (1..n) e grava só o que mudou
+  const [arrasto, setArrasto] = useState<{ de: number; para: number; dy: number; altura: number } | null>(null);
+  const arrastoRef = useRef<{ startY: number; de: number; centros: number[]; altura: number } | null>(null);
+  const ultimoArrasto = useRef<{ de: number; para: number } | null>(null);
+  const itensRef = useRef<Map<string, HTMLLIElement>>(new Map());
+
+  function iniciarArrasto(e: React.PointerEvent<HTMLElement>, indice: number) {
+    e.stopPropagation();
+    e.preventDefault();
+    const elementos = pendentes.map((i) => itensRef.current.get(i.id));
+    if (elementos.some((el) => !el)) return;
+    const rects = elementos.map((el) => el!.getBoundingClientRect());
+    const altura = rects[indice].height + 8; // 8 = espaço entre linhas
+    arrastoRef.current = {
+      startY: e.clientY,
+      de: indice,
+      centros: rects.map((r) => r.top + r.height / 2),
+      altura,
+    };
+    ultimoArrasto.current = { de: indice, para: indice };
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setArrasto({ de: indice, para: indice, dy: 0, altura });
+  }
+
+  function moverArrasto(e: React.PointerEvent<HTMLElement>) {
+    const a = arrastoRef.current;
+    if (!a) return;
+    const dy = e.clientY - a.startY;
+    const centroArrastado = a.centros[a.de] + dy;
+    const para = a.centros.filter((c, i) => i !== a.de && c < centroArrastado).length;
+    ultimoArrasto.current = { de: a.de, para };
+    setArrasto({ de: a.de, para, dy, altura: a.altura });
+  }
+
+  async function soltarArrasto() {
+    const resultado = ultimoArrasto.current;
+    arrastoRef.current = null;
+    ultimoArrasto.current = null;
+    setArrasto(null);
+    if (!resultado || resultado.para === resultado.de) return;
+
+    const novaOrdem = [...pendentes];
+    const [movido] = novaOrdem.splice(resultado.de, 1);
+    novaOrdem.splice(resultado.para, 0, movido);
+    const mudancas = new Map(
+      novaOrdem
+        .map((item, i) => ({ id: item.id, ordem: i + 1, atual: Number(item.ordem) }))
+        .filter((m) => m.atual !== m.ordem)
+        .map((m) => [m.id, m.ordem])
+    );
+
+    setItens((prev) => prev.map((i) => (mudancas.has(i.id) ? { ...i, ordem: mudancas.get(i.id)! } : i)));
+    const respostas = await Promise.all(
+      Array.from(mudancas, ([id, ordem]) => supabase.from("lista_compras").update({ ordem }).eq("id", id))
+    );
+    const falha = respostas.find((r) => r.error);
+    if (falha?.error) {
+      mostrarToast(mensagemErroSupabase(falha.error)!);
+      recarregarItens();
+    }
+  }
+
+  function deslocamento(indice: number): number {
+    if (!arrasto) return 0;
+    const { de, para, dy, altura } = arrasto;
+    if (indice === de) return dy;
+    if (de < para && indice > de && indice <= para) return -altura;
+    if (de > para && indice >= para && indice < de) return altura;
+    return 0;
+  }
+
   async function copiarLista() {
     const texto = pendentes.map((i) => `• ${i.produto?.nome} (${i.quantidade_desejada}x)`).join("\n");
     const conteudo = `Lista de compras\n\n${texto}\n\nEstimativa: ${formatBRL(estimativa)}`;
@@ -235,10 +310,34 @@ export default function ListaCompras() {
         <div className="space-y-6">
           {pendentes.length > 0 && (
             <ul className="space-y-2">
-              {pendentes.map((item) => (
-                <li key={item.id}>
+              {pendentes.map((item, indice) => (
+                <li
+                  key={item.id}
+                  ref={(el) => {
+                    if (el) itensRef.current.set(item.id, el);
+                    else itensRef.current.delete(item.id);
+                  }}
+                  style={{
+                    transform: `translateY(${deslocamento(indice)}px)`,
+                    transition: arrasto && arrasto.de !== indice ? "transform 150ms ease-out" : "none",
+                    zIndex: arrasto?.de === indice ? 10 : undefined,
+                    position: "relative",
+                  }}
+                  className={arrasto?.de === indice ? "shadow-lg rounded-xl" : ""}
+                >
                   <SwipeRow onDireita={() => toggleComprado(item)} onEsquerda={() => removerItem(item.id)}>
-                    <div className="flex items-center gap-3 border border-border rounded-xl px-4 py-3 select-none">
+                    <div className="flex items-center gap-2 border border-border rounded-xl pr-4 pl-1 py-3 select-none">
+                      <button
+                        aria-label="Arrastar pra reordenar"
+                        onPointerDown={(e) => iniciarArrasto(e, indice)}
+                        onPointerMove={moverArrasto}
+                        onPointerUp={soltarArrasto}
+                        onPointerCancel={soltarArrasto}
+                        style={{ touchAction: "none" }}
+                        className="w-8 h-10 flex items-center justify-center text-muted cursor-grab active:cursor-grabbing flex-shrink-0"
+                      >
+                        <GripVertical size={18} />
+                      </button>
                       <button
                         onClick={() => toggleComprado(item)}
                         aria-label="Marcar como comprado"
@@ -306,7 +405,7 @@ export default function ListaCompras() {
           )}
 
           <p className="text-xs text-muted text-center">
-            Arraste pra direita pra marcar como comprado e pra esquerda pra excluir.
+            Arraste pra direita pra marcar, pra esquerda pra excluir, e pela alça pra reordenar.
           </p>
         </div>
       )}
