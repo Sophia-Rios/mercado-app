@@ -7,14 +7,14 @@ import { useToast } from "@/components/ToastProvider";
 import { mensagemErroSupabase } from "@/lib/supabase-error";
 import { formatBRL } from "@/lib/format";
 import type { Compra, ItemLista, Produto } from "@/lib/types";
-import { Plus, Check, Trash2, Copy } from "lucide-react";
+import { Plus, Check, Trash2, Copy, Eraser } from "lucide-react";
 
 export default function ListaCompras() {
   const supabase = useMemo(() => createClient(), []);
   const mostrarToast = useToast();
   const [busca, setBusca] = useState("");
 
-  const { data: itens, setData: setItens } = useRealtimeCollection<ItemLista>(supabase, "lista_compras", {
+  const { data: itens, setData: setItens, refetch: recarregarItens } = useRealtimeCollection<ItemLista>(supabase, "lista_compras", {
     select: "*, produto:produtos(*)",
     orderBy: { column: "criado_em" },
   });
@@ -38,26 +38,40 @@ export default function ListaCompras() {
   // não deve derrubar o total previsto até a compra ser finalizada de fato
   const estimativa = itens.reduce((sum, item) => sum + (ultimoPreco.get(item.produto_id) ?? 0) * item.quantidade_desejada, 0);
 
+  // "20 tang" ou "20x tang" adiciona 20 unidades de uma vez
+  const { quantidadeDigitada, termoBusca } = useMemo(() => {
+    const m = busca.trim().match(/^(\d+)\s*(?:x|un|unid\w*)?\s+(.+)$/i);
+    return m
+      ? { quantidadeDigitada: Math.min(Number(m[1]), 999), termoBusca: m[2].trim() }
+      : { quantidadeDigitada: 1, termoBusca: busca.trim() };
+  }, [busca]);
+
   const produtosFiltrados = produtos.filter((p) => {
     if (busca.length === 0 || itens.some((i) => i.produto_id === p.id)) return false;
-    const termo = busca.toLowerCase();
-    return p.nome.toLowerCase().includes(termo) || (p.marca ?? "").toLowerCase().includes(termo);
+    const alvo = `${p.nome} ${p.marca ?? ""}`.toLowerCase();
+    return alvo.includes(termoBusca.toLowerCase()) || alvo.includes(busca.trim().toLowerCase());
   });
 
   async function adicionarItem(produtoId: string) {
-    const { error } = await supabase.from("lista_compras").insert({ produto_id: produtoId, quantidade_desejada: 1 });
+    const quantidade = Math.max(1, quantidadeDigitada);
+    setBusca("");
+    const { data, error } = await supabase
+      .from("lista_compras")
+      .insert({ produto_id: produtoId, quantidade_desejada: quantidade })
+      .select("*, produto:produtos(*)")
+      .single();
     if (error) {
       mostrarToast(mensagemErroSupabase(error)!);
       return;
     }
-    setBusca("");
+    setItens((prev) => (prev.some((i) => i.id === data.id) ? prev : [...prev, data as ItemLista]));
   }
 
   async function adicionarNovoProduto() {
-    if (!busca.trim()) return;
+    if (!termoBusca) return;
     const { data, error } = await supabase
       .from("produtos")
-      .insert({ nome: busca.trim(), categoria: "Outros" })
+      .insert({ nome: termoBusca, categoria: "Outros" })
       .select()
       .single();
     if (error) {
@@ -67,35 +81,58 @@ export default function ListaCompras() {
     await adicionarItem(data.id);
   }
 
+  // as ações abaixo atualizam a tela na hora e confirmam no banco em seguida;
+  // se o banco recusar, a tela volta ao estado real
   async function toggleComprado(item: ItemLista) {
-    // atualiza a marcação na hora, sem esperar o vai-e-volta do banco +
-    // realtime — é isso que fazia o toque parecer lento
     setItens((prev) => prev.map((i) => (i.id === item.id ? { ...i, comprado: !i.comprado } : i)));
     const { error } = await supabase.from("lista_compras").update({ comprado: !item.comprado }).eq("id", item.id);
     if (error) {
-      setItens((prev) => prev.map((i) => (i.id === item.id ? { ...i, comprado: item.comprado } : i)));
       mostrarToast(mensagemErroSupabase(error)!);
+      recarregarItens();
     }
   }
 
   async function removerItem(id: string) {
+    setItens((prev) => prev.filter((i) => i.id !== id));
     const { error } = await supabase.from("lista_compras").delete().eq("id", id);
-    if (error) mostrarToast(mensagemErroSupabase(error)!);
+    if (error) {
+      mostrarToast(mensagemErroSupabase(error)!);
+      recarregarItens();
+    }
   }
 
   async function finalizarCompra() {
+    setItens((prev) => prev.filter((i) => !i.comprado));
     const { error } = await supabase.from("lista_compras").delete().eq("comprado", true);
     if (error) {
       mostrarToast(mensagemErroSupabase(error)!);
+      recarregarItens();
       return;
     }
     mostrarToast("Compra finalizada");
   }
 
+  async function limparTudo() {
+    if (!window.confirm(`Remover os ${itens.length} itens da lista? Não dá pra desfazer.`)) return;
+    setItens([]);
+    const { error } = await supabase.from("lista_compras").delete().not("id", "is", null);
+    if (error) {
+      mostrarToast(mensagemErroSupabase(error)!);
+      recarregarItens();
+      return;
+    }
+    mostrarToast("Lista limpa");
+  }
+
   async function alterarQuantidade(item: ItemLista, delta: number) {
     const nova = Math.max(1, item.quantidade_desejada + delta);
+    if (nova === item.quantidade_desejada) return;
+    setItens((prev) => prev.map((i) => (i.id === item.id ? { ...i, quantidade_desejada: nova } : i)));
     const { error } = await supabase.from("lista_compras").update({ quantidade_desejada: nova }).eq("id", item.id);
-    if (error) mostrarToast(mensagemErroSupabase(error)!);
+    if (error) {
+      mostrarToast(mensagemErroSupabase(error)!);
+      recarregarItens();
+    }
   }
 
   async function copiarLista() {
@@ -118,14 +155,24 @@ export default function ListaCompras() {
             {pendentes.length} {pendentes.length === 1 ? "item pendente" : "itens pendentes"}
           </p>
         </div>
-        <button
-          onClick={copiarLista}
-          disabled={pendentes.length === 0}
-          className="flex items-center gap-2 px-4 py-2 rounded-full border border-border text-sm font-medium disabled:opacity-40"
-        >
-          <Copy size={16} />
-          Copiar
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={limparTudo}
+            disabled={itens.length === 0}
+            className="flex items-center gap-2 px-4 py-2 rounded-full border border-border text-sm font-medium text-danger disabled:opacity-40"
+          >
+            <Eraser size={16} />
+            Limpar tudo
+          </button>
+          <button
+            onClick={copiarLista}
+            disabled={pendentes.length === 0}
+            className="flex items-center gap-2 px-4 py-2 rounded-full border border-border text-sm font-medium disabled:opacity-40"
+          >
+            <Copy size={16} />
+            Copiar
+          </button>
+        </div>
       </div>
 
       {/* busca / adicionar */}
@@ -133,7 +180,7 @@ export default function ListaCompras() {
         <input
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
-          placeholder="Buscar ou adicionar item..."
+          placeholder="Buscar ou adicionar item... (ex: 20 tang)"
           className="w-full px-4 py-3 rounded-2xl bg-surface border border-border outline-none focus:ring-2 focus:ring-accent text-sm"
         />
         {busca.length > 0 && (
@@ -148,7 +195,10 @@ export default function ListaCompras() {
                   <span className="block truncate">{p.nome}</span>
                   {p.marca && <span className="block text-xs text-muted truncate">{p.marca}</span>}
                 </span>
-                <span className="text-muted text-xs flex-shrink-0">{p.categoria}</span>
+                <span className="text-muted text-xs flex-shrink-0">
+                  {quantidadeDigitada > 1 ? `${quantidadeDigitada}× · ` : ""}
+                  {p.categoria}
+                </span>
               </button>
             ))}
             <button
@@ -156,7 +206,7 @@ export default function ListaCompras() {
               className="w-full text-left px-4 py-3 hover:bg-bg text-sm flex items-center gap-2 text-accent font-medium border-t border-border"
             >
               <Plus size={16} />
-              Cadastrar &quot;{busca}&quot; como novo produto
+              Cadastrar &quot;{termoBusca}&quot; como novo produto{quantidadeDigitada > 1 ? ` (${quantidadeDigitada}×)` : ""}
             </button>
           </div>
         )}

@@ -1,5 +1,6 @@
 import type { Compra, Produto, UsuarioPreferencias } from "./types";
 import { formatBRL } from "./format";
+import { parseTamanho, precoPorBase, type Tamanho } from "./unidades";
 
 export type Notificacao = {
   id: string;
@@ -40,21 +41,40 @@ export function calcularNotificacoes(produtos: Produto[], compras: Compra[], pre
       porProduto.set(c.produto_id, arr);
     });
     porProduto.forEach((arr, produtoId) => {
-      if (arr.length < 2) return;
-      const porData = [...arr].sort((a, b) => (a.data_compra < b.data_compra ? 1 : -1));
+      // compara preço por kg / litro / unidade, não o preço da embalagem:
+      // 7L por R$ 25 sai mais barato que 2L por R$ 10. O tamanho vem da
+      // própria compra, ou do cadastro do produto quando a compra não tem.
+      const comTamanho = arr.map((c) => ({
+        c,
+        tamanho: parseTamanho(c.peso_volume ?? c.produto?.peso_volume) as Tamanho | null,
+      }));
+      const medidas = comTamanho.filter((x) => x.tamanho);
+      const usarTamanho = medidas.length > 0;
+      const base = usarTamanho ? medidas : comTamanho;
+      if (base.length < 2) return;
+      // tipos diferentes (ex: gramas x litros) não são comparáveis
+      if (usarTamanho && new Set(medidas.map((x) => x.tamanho!.tipo)).size > 1) return;
+
+      const valorDe = (x: (typeof base)[number]) =>
+        usarTamanho ? precoPorBase(x.c.preco_unitario, x.tamanho!).valor : x.c.preco_unitario;
+      const rotulo = usarTamanho ? precoPorBase(1, medidas[0].tamanho!).rotulo : "";
+      const mostrar = (x: (typeof base)[number]) =>
+        usarTamanho ? `${formatBRL(valorDe(x))}/${rotulo}` : formatBRL(x.c.preco_unitario);
+
+      const porData = [...base].sort((a, b) => (a.c.data_compra < b.c.data_compra ? 1 : -1));
       const ultimo = porData[0];
-      const maisBarato = [...arr].sort((a, b) => a.preco_unitario - b.preco_unitario)[0];
-      if (maisBarato.mercado_id === ultimo.mercado_id) return;
-      if (ultimo.preco_unitario > maisBarato.preco_unitario * 1.15) {
-        const dif = ultimo.preco_unitario - maisBarato.preco_unitario;
-        const nomeProduto = ultimo.produto?.nome ?? "Produto";
-        const mercadoUltimo = ultimo.mercado?.nome ?? "—";
-        const mercadoBarato = maisBarato.mercado?.nome ?? "—";
+      const maisBarato = [...base].sort((a, b) => valorDe(a) - valorDe(b))[0];
+      if (maisBarato.c.mercado_id === ultimo.c.mercado_id) return;
+      if (valorDe(ultimo) > valorDe(maisBarato) * 1.15) {
+        const dif = valorDe(ultimo) - valorDe(maisBarato);
+        const nomeProduto = ultimo.c.produto?.nome ?? "Produto";
+        const mercadoUltimo = ultimo.c.mercado?.nome ?? "—";
+        const mercadoBarato = maisBarato.c.mercado?.nome ?? "—";
         lista.push({
           id: `economia-${produtoId}`,
           tipo: "economia",
           titulo: `${nomeProduto} sai mais barato no ${mercadoBarato}`,
-          descricao: `Última compra: ${formatBRL(ultimo.preco_unitario)} no ${mercadoUltimo}. No ${mercadoBarato} saiu por ${formatBRL(maisBarato.preco_unitario)} (economia de ${formatBRL(dif)}).`,
+          descricao: `Última compra: ${mostrar(ultimo)} no ${mercadoUltimo}. No ${mercadoBarato} saiu por ${mostrar(maisBarato)} (economia de ${formatBRL(dif)}${usarTamanho ? `/${rotulo}` : ""}).`,
         });
       }
     });

@@ -11,7 +11,7 @@ export function useNotificacoes() {
   const supabase = useMemo(() => createClient(), []);
   const { data: produtos } = useRealtimeCollection<Produto>(supabase, "produtos");
   const { data: compras } = useRealtimeCollection<Compra>(supabase, "compras", {
-    select: "id, produto_id, mercado_id, preco_unitario, data_compra, produto:produtos(nome), mercado:mercados(nome)",
+    select: "id, produto_id, mercado_id, preco_unitario, data_compra, peso_volume, produto:produtos(nome, peso_volume), mercado:mercados(nome)",
   });
   const { data: prefsLinhas } = useRealtimeCollection<UsuarioPreferencias>(supabase, "usuario_preferencias");
   const { data: lidas } = useRealtimeCollection<NotificacaoLida>(supabase, "notificacoes_lidas");

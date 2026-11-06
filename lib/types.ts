@@ -41,6 +41,7 @@ export type Compra = {
   preco_total: number
   data_compra: string
   data_validade: string | null
+  peso_volume?: string | null
   produto?: Produto
   mercado?: Mercado
 }

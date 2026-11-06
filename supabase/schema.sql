@@ -77,6 +77,9 @@ create table if not exists compras (
 -- perde a filiação com o produto específico (ON DELETE SET NULL, não
 -- CASCADE). Refaz a constraint do zero pra garantir isso mesmo que uma
 -- versão anterior tenha criado com NOT NULL / CASCADE.
+-- tamanho da embalagem NESSA compra (ex: "7L"): o mesmo produto pode ser
+-- comprado em tamanhos diferentes, e a comparação de preço precisa disso
+alter table compras add column if not exists peso_volume text;
 alter table compras alter column produto_id drop not null;
 alter table compras drop constraint if exists compras_produto_id_fkey;
 alter table compras

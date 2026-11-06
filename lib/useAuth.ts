@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "./supabase";
+import { limparCacheColecoes } from "./useRealtimeCollection";
 
 export function useAuth() {
   const supabase = useMemo(() => createClient(), []);
@@ -24,6 +25,7 @@ export function useAuth() {
 
   async function sair() {
     await supabase.auth.signOut();
+    limparCacheColecoes();
     router.push("/login");
     router.refresh();
   }

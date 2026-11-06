@@ -98,6 +98,7 @@ export async function gravarCompras(supabase: SupabaseClient, validas: LinhaImpo
     preco_unitario: number;
     preco_total: number;
     data_compra: string;
+    peso_volume: string | null;
   }[] = [];
 
   validas.forEach((l) => {
@@ -118,6 +119,7 @@ export async function gravarCompras(supabase: SupabaseClient, validas: LinhaImpo
       preco_unitario: precoUnitario,
       preco_total: Math.round((l.precoTotal ?? 0) * 100) / 100,
       data_compra: l.data,
+      peso_volume: l.pesoVolume || null,
     });
   });
 
