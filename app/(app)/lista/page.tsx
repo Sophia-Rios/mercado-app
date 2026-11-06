@@ -7,7 +7,8 @@ import { useToast } from "@/components/ToastProvider";
 import { mensagemErroSupabase } from "@/lib/supabase-error";
 import { formatBRL } from "@/lib/format";
 import type { Compra, ItemLista, Produto } from "@/lib/types";
-import { Plus, Check, Trash2, Copy, Eraser } from "lucide-react";
+import { Plus, Check, Copy, Eraser } from "lucide-react";
+import SwipeRow from "@/components/SwipeRow";
 
 export default function ListaCompras() {
   const supabase = useMemo(() => createClient(), []);
@@ -235,33 +236,34 @@ export default function ListaCompras() {
           {pendentes.length > 0 && (
             <ul className="space-y-2">
               {pendentes.map((item) => (
-                <li
-                  key={item.id}
-                  className="flex items-center gap-3 bg-surface border border-border rounded-xl px-4 py-3"
-                >
-                  <button
-                    onClick={() => toggleComprado(item)}
-                    className="w-6 h-6 rounded-full border-2 border-border flex-shrink-0 flex items-center justify-center hover:border-accent"
-                  />
-                  <span className="flex-1 text-sm">{item.produto?.nome}</span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => alterarQuantidade(item, -1)}
-                      className="w-6 h-6 rounded-full border border-border text-xs"
-                    >
-                      −
-                    </button>
-                    <span className="font-data text-sm w-5 text-center">{item.quantidade_desejada}</span>
-                    <button
-                      onClick={() => alterarQuantidade(item, 1)}
-                      className="w-6 h-6 rounded-full border border-border text-xs"
-                    >
-                      +
-                    </button>
-                  </div>
-                  <button onClick={() => removerItem(item.id)} className="text-muted hover:text-danger">
-                    <Trash2 size={16} />
-                  </button>
+                <li key={item.id}>
+                  <SwipeRow onDireita={() => toggleComprado(item)} onEsquerda={() => removerItem(item.id)}>
+                    <div className="flex items-center gap-3 border border-border rounded-xl px-4 py-3 select-none">
+                      <button
+                        onClick={() => toggleComprado(item)}
+                        aria-label="Marcar como comprado"
+                        className="w-7 h-7 rounded-full border-2 border-border flex-shrink-0 flex items-center justify-center hover:border-accent"
+                      />
+                      <span className="flex-1 text-sm">{item.produto?.nome}</span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => alterarQuantidade(item, -1)}
+                          aria-label="Diminuir quantidade"
+                          className="w-10 h-10 rounded-full border border-border text-xl leading-none active:bg-surface-raised"
+                        >
+                          −
+                        </button>
+                        <span className="font-data text-base w-8 text-center">{item.quantidade_desejada}</span>
+                        <button
+                          onClick={() => alterarQuantidade(item, 1)}
+                          aria-label="Aumentar quantidade"
+                          className="w-10 h-10 rounded-full border border-border text-xl leading-none active:bg-surface-raised"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  </SwipeRow>
                 </li>
               ))}
             </ul>
@@ -280,25 +282,32 @@ export default function ListaCompras() {
               </div>
               <ul className="space-y-2">
                 {comprados.map((item) => (
-                  <li
-                    key={item.id}
-                    className="flex items-center gap-3 bg-surface/50 border border-border rounded-xl px-4 py-3 opacity-60"
-                  >
-                    <button
-                      onClick={() => toggleComprado(item)}
-                      className="w-6 h-6 rounded-full btn-accent flex-shrink-0 flex items-center justify-center"
+                  <li key={item.id}>
+                    <SwipeRow
+                      desfazer
+                      onDireita={() => toggleComprado(item)}
+                      onEsquerda={() => removerItem(item.id)}
                     >
-                      <Check size={14} className="text-accent-contrast" />
-                    </button>
-                    <span className="flex-1 text-sm line-through">{item.produto?.nome}</span>
-                    <button onClick={() => removerItem(item.id)} className="text-muted hover:text-danger">
-                      <Trash2 size={16} />
-                    </button>
+                      <div className="flex items-center gap-3 border border-border rounded-xl px-4 py-3 opacity-60 select-none">
+                        <button
+                          onClick={() => toggleComprado(item)}
+                          aria-label="Desmarcar"
+                          className="w-7 h-7 rounded-full btn-accent flex-shrink-0 flex items-center justify-center"
+                        >
+                          <Check size={14} className="text-accent-contrast" />
+                        </button>
+                        <span className="flex-1 text-sm line-through">{item.produto?.nome}</span>
+                      </div>
+                    </SwipeRow>
                   </li>
                 ))}
               </ul>
             </div>
           )}
+
+          <p className="text-xs text-muted text-center">
+            Arraste pra direita pra marcar como comprado e pra esquerda pra excluir.
+          </p>
         </div>
       )}
     </div>
