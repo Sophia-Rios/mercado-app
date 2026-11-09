@@ -46,6 +46,7 @@ export default function RegistrarCompraModal({
       preco_total: Math.round(precoNumero * quantidade * 100) / 100,
       data_compra: data,
       peso_volume: produto.peso_volume,
+      estoque_aplicado: true,
     });
     if (erroCompra) {
       setSalvando(false);

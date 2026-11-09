@@ -286,7 +286,7 @@ export default function ImportarNotaModal({ onFechar }: { onFechar: () => void }
       const lista = Array.from(grupos.values());
 
       // 3. grava compras + produtos novos
-      const { importadas, puladas, produtoIds } = await gravarCompras(
+      const { importadas, puladas, produtoIds, estoqueAtualizado } = await gravarCompras(
         supabase,
         lista.map((g) => g.linha)
       );
@@ -311,6 +311,7 @@ export default function ImportarNotaModal({ onFechar }: { onFechar: () => void }
 
       const partes = [`${importadas} ${importadas === 1 ? "compra importada" : "compras importadas"}`];
       if (puladas > 0) partes.push(`${puladas} já existiam`);
+      if (estoqueAtualizado > 0) partes.push(`estoque de ${estoqueAtualizado} produtos atualizado`);
       mostrarToast(partes.join(" · "));
       onFechar();
     } catch (e) {

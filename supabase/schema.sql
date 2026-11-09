@@ -80,6 +80,8 @@ create table if not exists compras (
 -- tamanho da embalagem NESSA compra (ex: "7L"): o mesmo produto pode ser
 -- comprado em tamanhos diferentes, e a comparação de preço precisa disso
 alter table compras add column if not exists peso_volume text;
+-- true quando a quantidade dessa compra já foi somada no estoque (evita somar 2x)
+alter table compras add column if not exists estoque_aplicado boolean not null default false;
 alter table compras alter column produto_id drop not null;
 alter table compras drop constraint if exists compras_produto_id_fkey;
 alter table compras

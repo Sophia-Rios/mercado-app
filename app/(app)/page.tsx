@@ -29,7 +29,7 @@ export default function Dashboard() {
   const { data: itensLista, loading: carregandoLista } = useRealtimeCollection<ItemLista>(supabase, "lista_compras");
   const { data: compras, loading: carregandoCompras } = useRealtimeCollection<Compra>(supabase, "compras", {
     select:
-      "id, produto_id, mercado_id, quantidade, preco_unitario, preco_total, data_compra, produto:produtos(categoria), mercado:mercados(nome, cor)",
+      "id, produto_id, mercado_id, quantidade, preco_unitario, preco_total, data_compra, produto:produtos(nome, marca, categoria), mercado:mercados(nome, cor)",
   });
   const { data: categorias } = useRealtimeCollection<Categoria>(supabase, "categorias");
 
@@ -100,12 +100,30 @@ export default function Dashboard() {
       return { mes: NOMES_MES[Number(mm) - 1], percentual: Math.round(percentual * 10) / 10 };
     });
 
+    const consumoMap = new Map<string, { nome: string; marca: string | null; quantidade: number; vezes: number }>();
+    compras.forEach((c) => {
+      if (!c.produto_id || !c.produto) return;
+      const e = consumoMap.get(c.produto_id) ?? {
+        nome: c.produto.nome,
+        marca: c.produto.marca,
+        quantidade: 0,
+        vezes: 0,
+      };
+      e.quantidade += Number(c.quantidade);
+      e.vezes += 1;
+      consumoMap.set(c.produto_id, e);
+    });
+    const maisConsumidos = Array.from(consumoMap.values())
+      .sort((a, b) => b.quantidade - a.quantidade)
+      .slice(0, 10);
+
     const hoje = new Date();
     const chaveAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
     const anteriorDate = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
     const chaveAnterior = `${anteriorDate.getFullYear()}-${String(anteriorDate.getMonth() + 1).padStart(2, "0")}`;
 
     return {
+      maisConsumidos,
       porMes,
       porCategoria,
       porMercadoTotal,
@@ -200,6 +218,36 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* produtos mais consumidos */}
+      {stats.maisConsumidos.length > 0 && (
+        <div className="surface-card p-6 mb-3">
+          <p className="text-sm text-muted mb-1">Produtos mais consumidos</p>
+          <p className="text-xs text-muted mb-4">Top 10 pela quantidade comprada em todo o histórico.</p>
+          <ol className="space-y-3">
+            {stats.maisConsumidos.map((p, i) => (
+              <li key={`${p.nome}-${p.marca}-${i}`}>
+                <div className="flex items-baseline justify-between gap-3 text-sm mb-1">
+                  <span className="min-w-0 truncate">
+                    <span className="text-muted font-data mr-2">{i + 1}</span>
+                    {p.nome}
+                    {p.marca && <span className="text-muted"> · {p.marca}</span>}
+                  </span>
+                  <span className="font-data flex-shrink-0">
+                    {Number.isInteger(p.quantidade) ? p.quantidade : p.quantidade.toFixed(2).replace(".", ",")}
+                  </span>
+                </div>
+                <div className="h-1.5 rounded-full bg-surface-raised overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-accent"
+                    style={{ width: `${(p.quantidade / stats.maisConsumidos[0].quantidade) * 100}%` }}
+                  />
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
 
       {/* gasto por categoria */}
       {stats.porCategoria.length > 0 && (

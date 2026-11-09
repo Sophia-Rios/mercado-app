@@ -13,6 +13,8 @@ import { CATEGORIAS } from "@/lib/categorias";
 import PrefToggle from "@/components/PrefToggle";
 import ImportarModal from "@/components/ImportarModal";
 import ImportarNotaModal from "@/components/ImportarNotaModal";
+import { aplicarUltimaCompraAoEstoque } from "@/lib/import-db";
+import { formatDataBR as dataBR } from "@/lib/format";
 import type { Categoria, Convite, MembroFamilia, UsuarioPreferencias } from "@/lib/types";
 
 export default function PerfilPage() {
@@ -108,6 +110,27 @@ export default function PerfilPage() {
       return;
     }
     mostrarToast("Itens comprados removidos da lista");
+  }
+
+  async function atualizarEstoqueComUltimaCompra() {
+    if (
+      !window.confirm(
+        "Soma no estoque as quantidades da compra mais recente que ainda não entraram na conta. Compras já somadas não são contadas de novo. Confirma?"
+      )
+    )
+      return;
+    try {
+      const { produtos, data } = await aplicarUltimaCompraAoEstoque(supabase);
+      mostrarToast(
+        data === null
+          ? "Ainda não há compras registradas"
+          : produtos === 0
+            ? `A compra de ${dataBR(data)} já estava no estoque`
+            : `Estoque de ${produtos} produtos atualizado com a compra de ${dataBR(data)}`
+      );
+    } catch (e) {
+      mostrarToast(e instanceof Error ? e.message : "Não consegui atualizar o estoque.");
+    }
   }
 
   async function resetarTudo() {
@@ -328,6 +351,14 @@ export default function PerfilPage() {
           className="w-full text-left text-sm text-text py-2 flex items-center justify-between"
         >
           Importar compras (Excel / CSV)
+          <ChevronRight size={15} className="text-muted" />
+        </button>
+        <div className="h-px bg-border my-1" />
+        <button
+          onClick={atualizarEstoqueComUltimaCompra}
+          className="w-full text-left text-sm text-text py-2 flex items-center justify-between"
+        >
+          Atualizar estoque com a última compra
           <ChevronRight size={15} className="text-muted" />
         </button>
         <div className="h-px bg-border my-1" />

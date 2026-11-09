@@ -43,9 +43,10 @@ export default function ImportarModal({ onFechar }: { onFechar: () => void }) {
 
     setImportando(true);
     try {
-      const { importadas, puladas } = await gravarCompras(supabase, validas);
+      const { importadas, puladas, estoqueAtualizado } = await gravarCompras(supabase, validas);
       const partes = [`${importadas} ${importadas === 1 ? "compra importada" : "compras importadas"}`];
       if (puladas > 0) partes.push(`${puladas} já existiam e foram ignoradas`);
+      if (estoqueAtualizado > 0) partes.push(`estoque de ${estoqueAtualizado} produtos atualizado`);
       mostrarToast(partes.join(" · "));
       onFechar();
     } catch (e) {
